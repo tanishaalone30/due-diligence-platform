@@ -1,0 +1,236 @@
+// src/components/property/QuickImageUploadModal.jsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { X, Camera, Loader2, Save, AlertTriangle } from "lucide-react";
+import { updateProperty } from "@/services/propertyService";
+import ImageUploader from "./ImageUploader";
+
+export default function QuickImageUploadModal({
+  isOpen,
+  onClose,
+  property,
+  onSuccess,
+}) {
+  const { t } = useTranslation();
+  const [imageUrl, setImageUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && property) {
+      setImageUrl(property.imageUrl ?? "");
+    }
+  }, [isOpen, property]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e) => e.key === "Escape" && !saving && onClose();
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, onClose, saving]);
+
+  if (!isOpen || !property) return null;
+
+  const originalImage = property.imageUrl ?? "";
+  const hasChanged = imageUrl !== originalImage;
+  const willRemove = originalImage && !imageUrl;
+  const willAdd = !originalImage && imageUrl;
+  const willReplace = originalImage && imageUrl && imageUrl !== originalImage;
+
+  const saveLabel = willRemove
+    ? t("property.quickImage.removePhoto")
+    : willReplace
+    ? t("property.quickImage.saveChanges")
+    : willAdd
+    ? t("property.quickImage.savePhoto")
+    : t("property.quickImage.noChanges");
+
+  const handleSave = async () => {
+    if (!hasChanged) {
+      onClose();
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        address: property.address,
+        city: property.city,
+        state: property.state,
+        zipCode: property.zipCode,
+        propertyType: property.propertyType,
+        area: property.area,
+        marketValue: property.marketValue,
+        yearBuilt: property.yearBuilt,
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        imageUrl: imageUrl || null,
+      };
+
+      const updated = await updateProperty(property.id, payload);
+
+      toast.success(
+        willRemove
+          ? t("property.quickImage.removedTitle")
+          : t("property.quickImage.updatedTitle"),
+        {
+          description: willRemove
+            ? t("property.quickImage.removedDesc")
+            : t("property.quickImage.updatedDesc"),
+        }
+      );
+
+      onSuccess?.(updated);
+      onClose();
+    } catch (err) {
+      toast.error(t("property.quickImage.updateFailed"), {
+        description: err.message || t("property.quickImage.tryAgainMoment"),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !saving) onClose();
+      }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-[#161b22] shadow-[0_30px_80px_rgba(0,0,0,0.3)] dark:shadow-[0_30px_80px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-200">
+
+        {/* Header */}
+        <div className="relative bg-gradient-to-br from-[#22C55E] via-[#22C55E] to-[#16a34a] px-5 py-4">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)",
+              backgroundSize: "20px 20px",
+            }}
+          />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm ring-1 ring-white/30">
+              <Camera className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-black text-white tracking-tight">
+                {originalImage
+                  ? t("property.quickImage.updatePhoto")
+                  : t("property.quickImage.addPhoto")}
+              </h2>
+              <p className="text-[11px] text-white/80 mt-0.5 truncate">
+                {property.address}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 backdrop-blur-sm disabled:opacity-50"
+            aria-label={t("property.quickImage.closeAria")}
+          >
+            <X className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-5">
+          <ImageUploader
+            value={imageUrl}
+            onChange={setImageUrl}
+            disabled={saving}
+          />
+
+          {willRemove && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-[#282a10] px-3 py-2.5">
+              <AlertTriangle
+                className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"
+                strokeWidth={2.2}
+              />
+              <div className="flex-1">
+                <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300 leading-tight">
+                  {t("property.quickImage.stagedWarningTitle")}
+                </p>
+                {/* Split the warning desc into three parts to keep <bold> emphasis */}
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5 leading-snug">
+                  {t("property.quickImage.stagedWarningDesc")
+                    .split(/<1>|<\/1>|<3>|<\/3>/)
+                    .map((part, i) =>
+                      i % 2 === 1 ? (
+                        <span key={i} className="font-bold">
+                          {part}
+                        </span>
+                      ) : (
+                        <span key={i}>{part}</span>
+                      )
+                    )}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!willRemove && (
+            <p className="mt-3 text-[11px] text-gray-500 dark:text-[#7d8590]">
+              {originalImage
+                ? t("property.quickImage.replaceHint")
+                : t("property.quickImage.addHint")}
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-[#30363d] bg-gray-50/70 dark:bg-[#0d1117] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-xl border border-gray-200 dark:border-[#30363d] bg-white dark:bg-[#1c2128] px-4 py-2 text-sm font-semibold text-gray-700 dark:text-[#e6edf3] transition hover:bg-gray-100 dark:hover:bg-[#30363d] disabled:opacity-50"
+          >
+            {t("property.quickImage.cancel")}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !hasChanged}
+            className={`
+              flex items-center gap-2 rounded-xl
+              px-5 py-2 text-sm font-bold text-white
+              transition-all
+              hover:scale-[1.02] active:scale-[0.98]
+              disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed
+              ${willRemove
+                ? "bg-gradient-to-br from-red-500 to-red-600 shadow-[0_8px_20px_rgba(239,68,68,0.3)] hover:shadow-[0_12px_30px_rgba(239,68,68,0.45)]"
+                : "bg-gradient-to-br from-[#22C55E] to-[#16a34a] shadow-[0_8px_20px_rgba(34,197,94,0.3)] hover:shadow-[0_12px_30px_rgba(34,197,94,0.45)]"
+              }
+            `}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("property.quickImage.saving")}
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" strokeWidth={2.5} />
+                {saveLabel}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
